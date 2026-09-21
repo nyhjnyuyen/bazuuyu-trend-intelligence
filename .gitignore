@@ -35,3 +35,5 @@ output/*.json
 
 # ── Docker volumes ───────────────────────────────────────────
 postgres_data/
+
+support/output/
