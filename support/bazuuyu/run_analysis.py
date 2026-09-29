@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from support.bazuuyu.analyzer import analyze_trend
+from support.bazuuyu.bazuuyu_relevance import assess_bazuuyu_relevance
 from support.config import OUTPUT_FILE
 
 
@@ -46,12 +47,34 @@ def run_analysis():
                     f"  Analyzing: {trend.get('title', 'Unknown trend')}"
                 )
 
-                bazuuyu_analysis = analyze_trend(trend)
+                relevance = assess_bazuuyu_relevance(trend)
 
-                combined = {
-                    "original_trend": trend,
-                    "bazuuyu_analysis": bazuuyu_analysis,
-                }
+                if not relevance["is_relevant"]:
+                    print(
+                        f"    LOW relevance — skipping Gemini: "
+                        f"{relevance['relevance_score']}"
+                    )
+
+                    combined = {
+                        "original_trend": trend,
+                        "bazuuyu_relevance": relevance,
+                        "bazuuyu_analysis": None,
+                    }
+
+                else:
+                    print(
+                        f"    Bazuuyu relevance: "
+                        f"{relevance['relevance_level']} "
+                        f"({relevance['relevance_score']})"
+                    )
+
+                    bazuuyu_analysis = analyze_trend(trend)
+
+                    combined = {
+                        "original_trend": trend,
+                        "bazuuyu_relevance": relevance,
+                        "bazuuyu_analysis": bazuuyu_analysis,
+                    }
 
                 analyzed_trends.append(combined)
 
