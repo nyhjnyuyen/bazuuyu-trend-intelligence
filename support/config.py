@@ -97,6 +97,12 @@ RAW_CSV_PATH = os.getenv(
     "RAW_CSV_PATH",
     os.path.join(PROJECT_ROOT, "data", "final_trendingtopics_reddit.csv"),
 )
+
+# ─────────────────────────────────────────────────────────────
+# TMDB (The Movie Database) API
+# ─────────────────────────────────────────────────────────────
+TMDB_API_TOKEN = os.getenv("TMDB_API_TOKEN")
+
 # ─────────────────────────────────────────────────────────────
 # BAZUUYU RELEVANCE FILTER
 # ─────────────────────────────────────────────────────────────
