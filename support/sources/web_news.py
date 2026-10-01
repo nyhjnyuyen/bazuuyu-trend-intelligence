@@ -140,12 +140,58 @@ def summarize_google_news(
         if article.get("published_date")
     ]
 
+        # Preserve cluster-level news coverage evidence.
+    largest_story = max(
+        stories,
+        key=lambda story: story.get(
+            "article_count",
+            0,
+        ),
+        default=None,
+    )
+
+    if largest_story:
+        largest_story_article_count = (
+            largest_story.get(
+                "article_count",
+                0,
+            )
+        )
+
+        largest_story_publisher_count = len(
+            largest_story.get(
+                "publishers",
+                [],
+            )
+        )
+
+    else:
+        largest_story_article_count = 0
+        largest_story_publisher_count = 0
+
+    story_concentration = (
+        largest_story_article_count
+        / len(articles)
+        if articles
+        else 0.0
+    )
+
     return {
         "query": query,
         "article_count": len(articles),
         "unique_story_count": len(stories),
         "duplicate_article_count": (
             len(articles) - len(stories)
+        ),
+                "largest_story_article_count": (
+            largest_story_article_count
+        ),
+        "largest_story_publisher_count": (
+            largest_story_publisher_count
+        ),
+        "story_concentration": round(
+            story_concentration,
+            3,
         ),
         "latest_activity": max(dates) if dates else None,
         "earliest_activity": min(dates) if dates else None,
