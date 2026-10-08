@@ -24,7 +24,7 @@ def main():
 
     routed = route_future_candidates(
         candidates,
-        toynewsi_limit=10,
+        toynewsi_limit=25,
     )
 
     kept = get_kept_candidates(
@@ -41,13 +41,13 @@ def main():
     # Enrich with ToyNewsI evidence.
     enriched = enrich_with_toy_evidence(
         kept,
-        toynewsi_limit=10,
+        toynewsi_limit=25,
     )
 
     # Enrich with Google News evidence.
     enriched = enrich_with_news(
         enriched,
-        news_limit=20,
+        news_limit=50,
     )
 
     output_dir = Path("support/output/future_trends")

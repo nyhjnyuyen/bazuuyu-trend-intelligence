@@ -40,11 +40,17 @@ function WelcomePage() {
           <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
             Discover the top 3 trending topics in a niche and timeframe through clustered Reddit conversations.
           </p>
-          <div className="mt-10">
+          <div className="mt-10 flex flex-wrap gap-3">
             <Button asChild variant="signal" size="lg" className="h-12 px-6 text-base">
               <Link to="/explore">
                 Explore Trends
                 <ArrowRight className="size-5" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="h-12 px-6 text-base">
+              <Link to="/future">
+                Future Opportunities
+                <Sparkles className="size-5" />
               </Link>
             </Button>
           </div>

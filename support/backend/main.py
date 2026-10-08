@@ -45,6 +45,8 @@ from backend.database import (
     get_all_summaries,
     get_metadata,
     reload_trends,
+    get_future_bazuuyu_results,
+    get_future_bazuuyu_metadata,
 )
 
 # ────────────────────────────────────────────────────────────
@@ -179,6 +181,59 @@ def weekly_summary(
 
     return {"niche": niche, "weeks": weeks}
 
+@app.get("/api/v1/future-opportunities")
+def future_opportunities(
+    priority: str | None = Query(
+        None,
+        description=(
+            "Optional final-priority filter, "
+            "for example TOP_PRIORITY or WATCH"
+        ),
+    ),
+):
+    """
+    Return ranked future entertainment/IP
+    opportunities for Bazuuyu.
+    """
+
+    results = (
+        get_future_bazuuyu_results()
+    )
+
+    meta = (
+        get_future_bazuuyu_metadata()
+    )
+
+    if priority:
+        requested = priority.upper()
+
+        results = [
+            result
+            for result in results
+            if (
+                result.get(
+                    "final_priority"
+                )
+                == requested
+            )
+        ]
+
+    return {
+        "generated_at": (
+            meta.get(
+                "generated_at"
+            )
+        ),
+        "source_snapshot": (
+            meta.get(
+                "source_snapshot"
+            )
+        ),
+        "candidate_count": len(
+            results
+        ),
+        "results": results,
+    }
 
 @app.post("/api/v1/reload")
 def reload():
@@ -196,7 +251,7 @@ if __name__ == "__main__":
     print(f"\n🚀 Starting Reddit Trend Finder API on {API_HOST}:{API_PORT}")
     print(f"   Docs: http://localhost:{API_PORT}/docs\n")
     uvicorn.run(
-        "main:app",
+        "backend.main:app",
         host=API_HOST,
         port=API_PORT,
         reload=True,

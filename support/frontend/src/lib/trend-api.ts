@@ -44,6 +44,43 @@ export interface NichesResponse {
   niches: NicheSummary[];
 }
 
+export interface FutureOpportunity {
+  ip: string;
+  title: string;
+  release_date: string | null;
+
+  momentum_score: number | null;
+  momentum_class: string | null;
+  signal_profile: string | null;
+
+  timing_score: number | null;
+  action_timing: string | null;
+  days_to_release: number | null;
+  days_since_toy_activity: number | null;
+
+  opportunity_score: number | null;
+  opportunity_class: string | null;
+
+  fit_score: number;
+  fit_level: string;
+  fit_signals: string[];
+  character_count: number;
+  animal_matches: string[];
+
+  final_score: number | null;
+  final_priority: string;
+
+  recommended_action: string | null;
+  recommendation_summary: string | null;
+}
+
+export interface FutureOpportunitiesResponse {
+  generated_at: string;
+  source_snapshot: string;
+  candidate_count: number;
+  results: FutureOpportunity[];
+}
+
 export const nicheMeta: Record<string, { emoji: string; label: string }> = {
   technology: { emoji: "🖥", label: "Technology" },
   science: { emoji: "🔬", label: "Science" },
@@ -74,4 +111,28 @@ export async function fetchTrends(niche: string, week?: string | number, signal?
   });
   if (!response.ok) throw new Error(`Could not load trends (${response.status})`);
   return (await response.json()) as TrendResponse;
+}
+
+export async function fetchFutureOpportunities(
+  signal?: AbortSignal,
+) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/future-opportunities`,
+    {
+      signal,
+      headers: {
+        accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Could not load future opportunities (${response.status})`,
+    );
+  }
+
+  return (
+    await response.json()
+  ) as FutureOpportunitiesResponse;
 }

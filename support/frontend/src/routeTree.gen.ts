@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as FutureRouteImport } from './routes/future'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ExploreNicheRouteImport } from './routes/explore.$niche'
 import { Route as ExploreNicheWeekNumberRouteImport } from './routes/explore.$niche.$weekNumber'
 
+const FutureRoute = FutureRouteImport.update({
+  id: '/future',
+  path: '/future',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExploreRoute = ExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
@@ -38,12 +44,14 @@ const ExploreNicheWeekNumberRoute = ExploreNicheWeekNumberRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/explore': typeof ExploreRouteWithChildren
+  '/future': typeof FutureRoute
   '/explore/$niche': typeof ExploreNicheRouteWithChildren
   '/explore/$niche/$weekNumber': typeof ExploreNicheWeekNumberRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/explore': typeof ExploreRouteWithChildren
+  '/future': typeof FutureRoute
   '/explore/$niche': typeof ExploreNicheRouteWithChildren
   '/explore/$niche/$weekNumber': typeof ExploreNicheWeekNumberRoute
 }
@@ -51,6 +59,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/explore': typeof ExploreRouteWithChildren
+  '/future': typeof FutureRoute
   '/explore/$niche': typeof ExploreNicheRouteWithChildren
   '/explore/$niche/$weekNumber': typeof ExploreNicheWeekNumberRoute
 }
@@ -59,14 +68,21 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/explore'
+    | '/future'
     | '/explore/$niche'
     | '/explore/$niche/$weekNumber'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/explore' | '/explore/$niche' | '/explore/$niche/$weekNumber'
+  to:
+    | '/'
+    | '/explore'
+    | '/future'
+    | '/explore/$niche'
+    | '/explore/$niche/$weekNumber'
   id:
     | '__root__'
     | '/'
     | '/explore'
+    | '/future'
     | '/explore/$niche'
     | '/explore/$niche/$weekNumber'
   fileRoutesById: FileRoutesById
@@ -74,10 +90,18 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ExploreRoute: typeof ExploreRouteWithChildren
+  FutureRoute: typeof FutureRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/future': {
+      id: '/future'
+      path: '/future'
+      fullPath: '/future'
+      preLoaderRoute: typeof FutureRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/explore': {
       id: '/explore'
       path: '/explore'
@@ -135,6 +159,7 @@ const ExploreRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ExploreRoute: ExploreRouteWithChildren,
+  FutureRoute: FutureRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

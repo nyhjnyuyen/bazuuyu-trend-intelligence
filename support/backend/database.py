@@ -9,12 +9,16 @@ live post data when needed.
 import json
 import os
 from functools import lru_cache
+from pathlib import Path
 
 import pandas as pd
 
 # Resolve paths — output/ is in support/ (one level up from backend/)
 _SUPPORT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _OUTPUT_FILE = os.path.join(_SUPPORT_DIR, "output", "weekly_trends.json")
+_FUTURE_BAZUUYU_DIR = Path(
+    _SUPPORT_DIR
+) / "output" / "future_bazuuyu"
 
 
 def _load_trends() -> dict:
@@ -93,4 +97,75 @@ def get_metadata() -> dict:
     return {
         "generated_at": data.get("generated_at", "unknown"),
         "model": data.get("model", "unknown"),
+    }
+def get_latest_future_bazuuyu_file():
+    """
+    Return the newest generated Bazuuyu
+    future-priority report.
+    """
+
+    if not _FUTURE_BAZUUYU_DIR.exists():
+        return None
+
+    files = sorted(
+        _FUTURE_BAZUUYU_DIR.glob(
+            "future_bazuuyu_priority_*.json"
+        )
+    )
+
+    if not files:
+        return None
+
+    return files[-1]
+
+
+def get_future_bazuuyu_data() -> dict:
+    """
+    Load the latest Bazuuyu future-priority report.
+    """
+
+    path = get_latest_future_bazuuyu_file()
+
+    if path is None:
+        return {}
+
+    with path.open(
+        "r",
+        encoding="utf-8",
+    ) as file:
+        return json.load(file)
+
+
+def get_future_bazuuyu_results() -> list[dict]:
+    """
+    Return ranked future Bazuuyu opportunities.
+    """
+
+    data = get_future_bazuuyu_data()
+
+    return data.get(
+        "results",
+        [],
+    )
+
+
+def get_future_bazuuyu_metadata() -> dict:
+    """
+    Return metadata for the latest
+    future-priority report.
+    """
+
+    data = get_future_bazuuyu_data()
+
+    return {
+        "generated_at": data.get(
+            "generated_at"
+        ),
+        "source_snapshot": data.get(
+            "source_snapshot"
+        ),
+        "candidate_count": data.get(
+            "candidate_count",
+            0,
+        ),
     }

@@ -37,3 +37,4 @@ output/*.json
 postgres_data/
 
 support/output/
+support/frontend/node_modules/
