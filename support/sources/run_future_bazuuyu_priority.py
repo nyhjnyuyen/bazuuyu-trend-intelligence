@@ -144,9 +144,40 @@ def build_future_bazuuyu_report():
                 action = (
                     "COLLECT_MORE_DATA"
                 )
+        toy = candidate.get("toy_industry") or {}
 
+        toy_evidence = {
+            "validated_article_count": toy.get("validated_article_count"),
+            "commercial_product_article_count": toy.get(
+                "commercial_product_article_count"
+            ),
+            "movie_specific_commercial_article_count": toy.get(
+                "movie_specific_commercial_article_count"
+            ),
+            "recent_30d_count": toy.get("recent_30d_count"),
+            "latest_activity": toy.get("latest_activity"),
+            "evidence_category_counts": toy.get("evidence_category_counts"),
+        }
+
+        toy = candidate.get("toy_industry") or {}
         result = {
             "ip": ip,
+            "toy_evidence": {
+                "validated_article_count": toy.get(
+                    "validated_article_count"
+                ),
+                "commercial_product_article_count": toy.get(
+                    "commercial_product_article_count"
+                ),
+                "movie_specific_commercial_article_count": toy.get(
+                    "movie_specific_commercial_article_count"
+                ),
+                "recent_30d_count": toy.get("recent_30d_count"),
+                "latest_activity": toy.get("latest_activity"),
+                "evidence_category_counts": toy.get(
+                    "evidence_category_counts"
+                ),
+            },
             "title": candidate.get(
                 "title"
             ),

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, date
 
 from support.sources.toynewsi_signals import (
     detect_toynewsi_signals,
+    classify_toy_evidence,
 )
 
 def summarize_validated_toy_ip(
@@ -42,6 +43,8 @@ def summarize_validated_toy_ip(
             **article,
             "ip_evidence": evidence,
         }
+
+        item["toy_evidence"] = classify_toy_evidence(item)
 
         if evidence["matched"]:
             validated_articles.append(item)
@@ -88,17 +91,13 @@ def summarize_validated_toy_ip(
         recent_30d_count = sum(
             1
             for _, date_value in dated_articles
-            if date_value >= latest_date - timedelta(
-                days=30
-            )
+            if date.today() - timedelta(days=30) <= date_value.date() <= date.today()
         )
 
         recent_90d_count = sum(
             1
             for _, date_value in dated_articles
-            if date_value >= latest_date - timedelta(
-                days=90
-            )
+            if date.today() - timedelta(days=90) <= date_value.date() <= date.today()
         )
 
         days_since_latest_activity = (
@@ -160,6 +159,19 @@ def summarize_validated_toy_ip(
         ),
         "evidence_strength_counts": dict(
             evidence_strength_counts
+        ),
+        "evidence_category_counts": dict(Counter(
+            article["toy_evidence"]["category"]
+            for article in validated_articles
+        )),
+        "commercial_product_article_count": sum(
+            article["toy_evidence"]["category"] == "COMMERCIAL_PRODUCT"
+            for article in validated_articles
+        ),
+        "movie_specific_commercial_article_count": sum(
+            article["toy_evidence"]["category"] == "COMMERCIAL_PRODUCT"
+            and article["toy_evidence"]["movie_specific"]
+            for article in validated_articles
         ),
         "signal_counts": dict(
             validated_signal_counts

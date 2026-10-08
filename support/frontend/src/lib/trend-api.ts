@@ -44,8 +44,18 @@ export interface NichesResponse {
   niches: NicheSummary[];
 }
 
+export interface ToyEvidence {
+  validated_article_count: number | null;
+  commercial_product_article_count: number | null;
+  movie_specific_commercial_article_count: number | null;
+  recent_30d_count: number | null;
+  latest_activity: string | null;
+  evidence_category_counts: Record<string, number> | null;
+}
+
 export interface FutureOpportunity {
   ip: string;
+  toy_evidence?: ToyEvidence | null;
   title: string;
   release_date: string | null;
 

@@ -1,4 +1,7 @@
 import json
+import os
+from zipfile import Path
+from dotenv import load_dotenv
 import requests
 import time
 from datetime import datetime, timedelta, timezone
@@ -6,17 +9,19 @@ from datetime import datetime, timedelta, timezone
 # ============================================================
 #  CONFIG
 # ============================================================
-SCRAPER_API_KEY = 'YOUR_SCRAPERAPI_KEY_HERE'  # Get a free key at https://www.scraperapi.com/
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY", "")
+if not SCRAPER_API_KEY or SCRAPER_API_KEY == "YOUR_SCRAPERAPI_KEY_HERE":
+    raise RuntimeError(
+        "Set SCRAPER_API_KEY in your environment before running the scraper."
+    )
 DAYS_BACK       = 30
 OUTPUT_FILE     = 'reddit_trends_last_30_days.json'
 
 SUBREDDITS = [
-    "technology",
-    "worldnews",
-    "science",
-    "gaming",
-    "movies",
-    "smartphones"
+    "plushies",
+    "Jellycatplush",
+    "squishmallow",
 ]
 
 # Each endpoint gives a different pool of up to 1,000 posts
@@ -164,6 +169,11 @@ if __name__ == "__main__":
     print(f"📡 Endpoints  : {len(ENDPOINTS)} per subreddit\n")
 
     all_posts = fetch_all_subreddits()
+    if not all_posts:
+        raise RuntimeError(
+            "No posts collected. Output file was not updated. "
+            "Check source access and request errors."
+    )
 
     all_posts.sort(key=lambda x: x['timestamp_utc'], reverse=True)
 

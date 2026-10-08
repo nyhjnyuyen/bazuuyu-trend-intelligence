@@ -1,557 +1,482 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  CalendarDays,
-  Radar,
-  Sparkles,
-  TrendingUp,
+  ChevronDown,
+  RefreshCw,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchFutureOpportunities,
   type FutureOpportunity,
 } from "@/lib/trend-api";
 
 export const Route = createFileRoute("/future")({
-  component: FutureOpportunitiesPage,
+  component: FuturePage,
   head: () => ({
     meta: [
-      {
-        title: "Future Opportunities — Bazuuyu Trend Intelligence",
-      },
+      { title: "Bazuuyu — What's Next?" },
       {
         name: "description",
-        content:
-          "Ranked future entertainment and IP opportunities for Bazuuyu.",
+        content: "Explore future character and entertainment opportunities.",
       },
     ],
   }),
 });
 
-function displayLabel(value?: string | null) {
-  if (!value) return "—";
+const filters = [
+  ["ALL", "Everything"],
+  ["TOP_PRIORITY", "Top priority"],
+  ["HIGH_PRIORITY", "High priority"],
+  ["WATCH", "Watch"],
+  ["LOW_PRIORITY", "Low priority"],
+  ["IGNORE_FOR_NOW", "Later"],
+  ["WATCHLIST", "High-fit watchlist"],
+  ["PENDING", "Pending history"],
+] as const;
 
+type Filter = (typeof filters)[number][0];
+
+function label(value?: string | null) {
   return value
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+    ? value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+    : "Pending";
 }
 
-function scoreLabel(score: number | null) {
-  if (score === null) return "Pending";
-  return score.toFixed(2);
+function score(value?: number | null) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toFixed(1)
+    : "—";
 }
 
-function FutureOpportunitiesPage() {
+function releaseDate(value: string | null) {
+  if (!value) return "Not announced";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "Not announced";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function priorityStyle(priority: string) {
+  switch (priority) {
+    case "TOP_PRIORITY":
+      return "bg-[#ffe0e5] text-[#a62f4d]";
+    case "HIGH_PRIORITY":
+      return "bg-[#ffedcb] text-[#86581a]";
+    case "WATCH":
+      return "bg-[#e4eddf] text-[#456740]";
+    default:
+      return "bg-[#eee9e3] text-[#71685f]";
+  }
+}
+
+function FuturePage() {
   const [results, setResults] = useState<FutureOpportunity[]>([]);
   const [generatedAt, setGeneratedAt] = useState<string>();
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<
-    "ALL" | "TOP_PRIORITY" | "WATCH" | "LOW_PRIORITY" | "WATCHLIST"
-  >("ALL");
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("ALL");
+  const [query, setQuery] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
 
     async function load() {
+      setLoading(true);
+      setError(null);
       try {
-        setLoading(true);
-
-        const payload = await fetchFutureOpportunities(
-          controller.signal,
-        );
-
+        const payload = await fetchFutureOpportunities(controller.signal);
+        if (controller.signal.aborted) return;
         setResults(payload.results);
         setGeneratedAt(payload.generated_at);
-      } catch (error) {
-        if ((error as Error).name !== "AbortError") {
-          toast.error("Could not load future opportunities", {
-            description:
-              "Make sure the API is running at http://localhost:8000.",
-          });
+      } catch (caught) {
+        if (!controller.signal.aborted) {
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "The report could not be loaded.",
+          );
         }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    load();
-
+    void load();
     return () => controller.abort();
-  }, []);
+  }, [reloadKey]);
 
   const ranked = useMemo(
     () =>
-      results.filter(
-        (item) => item.final_score !== null,
-      ),
+      results
+        .filter((item) => item.final_score != null)
+        .sort((a, b) => (b.final_score ?? 0) - (a.final_score ?? 0)),
     [results],
   );
 
-  const watchlist = useMemo(
-    () =>
-      results.filter(
-        (item) =>
-          item.final_score === null &&
-          item.fit_score >= 75,
-      ),
-    [results],
-  );
+  const pending = results.filter((item) => item.final_score == null);
+  const watchlist = pending.filter((item) => item.fit_score >= 75);
+  const ordered = [...ranked, ...pending];
 
-  const filteredRanked = useMemo(() => {
-    if (filter === "ALL") {
-      return ranked;
-    }
+  const visible = ordered.filter((item) => {
+    const matchesFilter =
+      filter === "ALL" ||
+      (filter === "PENDING" && item.final_score == null) ||
+      (filter === "WATCHLIST" &&
+        item.final_score == null &&
+        item.fit_score >= 75) ||
+      item.final_priority === filter;
 
-    if (filter === "WATCHLIST") {
-      return [];
-    }
+    const text = `${item.ip} ${item.title}`.toLowerCase();
+    return matchesFilter && text.includes(query.trim().toLowerCase());
+  });
 
-    return ranked.filter(
-      (item) =>
-        item.final_priority === filter,
-    );
-  }, [filter, ranked]);
-
-  const showWatchlist =
-    filter === "ALL" ||
-    filter === "WATCHLIST";
-
-  const topPriorityCount = ranked.filter(
-    (item) => item.final_priority === "TOP_PRIORITY",
-  ).length;
-
-  const watchCount = ranked.filter(
-    (item) => item.final_priority === "WATCH",
-  ).length;
-
-  const lowPriorityCount = ranked.filter(
-    (item) => item.final_priority === "LOW_PRIORITY",
-  ).length;
-
-  const watchlistCount = watchlist.length;
+  const updated = generatedAt ? new Date(generatedAt) : null;
 
   return (
-    <main className="min-h-screen bg-background px-5 py-8 text-foreground">
-      <section className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <Button asChild variant="outline">
-            <Link to="/">
-              <ArrowLeft className="size-4" />
-              Home
-            </Link>
-          </Button>
-
-          {generatedAt && (
-            <p className="text-sm text-muted-foreground">
-              Updated{" "}
-              {new Date(
-                generatedAt,
-              ).toLocaleString()}
-            </p>
-          )}
+    <main
+      className="min-h-screen bg-[#faf6ee] text-[#42362f]"
+      style={{
+        fontFamily: '"Avenir Next", "Nunito", "Trebuchet MS", sans-serif',
+        colorScheme: "light",
+      }}
+    >
+      <header className="border-b border-[#e8dfd3]">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
+          <Link to="/" className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="flex h-10 w-10 rotate-[-8deg] items-center justify-center rounded-2xl bg-[#f7b9c5] text-xl"
+            >
+              ✿
+            </span>
+            <span className="text-xl font-black tracking-tight">bazuuyu</span>
+          </Link>
+          <Link
+            to="/"
+            className="flex items-center gap-2 text-sm font-semibold text-[#75665c] hover:text-[#a62f4d]"
+          >
+            <ArrowLeft size={15} />
+            All trends
+          </Link>
         </div>
+      </header>
 
-        <div className="mb-10">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
-            <Radar className="size-4" />
-            Bazuuyu Future Intelligence
+      <div className="mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-8">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[#976650]">
+              The Bazuuyu lookout
+            </p>
+            <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
+              What&apos;s next?
+              <span aria-hidden="true" className="ml-3 text-[#d65c78]">✳</span>
+            </h1>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-[#75665c]">
+              Meet the characters and stories worth watching.
+              Find your next research idea here.
+            </p>
           </div>
 
-          <h1 className="font-display text-4xl font-bold sm:text-6xl">
-            Future Opportunities
-          </h1>
-
-          <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">
-            Future entertainment and IP opportunities ranked by
-            momentum, timing, toy-market signals, and Bazuuyu
-            product fit.
-          </p>
+          <div className="flex items-center gap-3">
+            {updated && !Number.isNaN(updated.getTime()) && (
+              <p className="text-xs text-[#75665c]">
+                Report · {updated.toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => setReloadKey((value) => value + 1)}
+              className="flex items-center gap-2 rounded-xl border border-[#dacfc2] bg-[#fffdf8] px-3 py-2 text-xs font-bold hover:bg-[#f3ebdf] disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+              Refresh report
+            </button>
+          </div>
         </div>
 
-        {loading ? (
-          <LoadingGrid />
-        ) : (
-          <>
-            <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <SummaryCard
-                label="Top Priority"
-                value={topPriorityCount}
-                description="Act on these first"
-              />
+        {!loading && !error && (
+          <div className="mb-8 flex flex-wrap gap-x-7 gap-y-3 border-y border-[#e8dfd3] py-4 text-sm">
+            <Count
+              value={ranked.filter((item) => item.final_priority === "TOP_PRIORITY").length}
+              text="top priority"
+              color="#b83e5b"
+            />
+            <Count
+              value={ranked.filter((item) => item.final_priority === "HIGH_PRIORITY").length}
+              text="high priority"
+              color="#86581a"
+            />
+            <Count
+              value={ranked.filter((item) => item.final_priority === "WATCH").length}
+              text="to watch"
+              color="#456740"
+            />
+            <Count value={watchlist.length} text="high-fit, awaiting history" color="#75665c" />
+          </div>
+        )}
 
-              <SummaryCard
-                label="Watch"
-                value={watchCount}
-                description="Monitor closely"
-              />
+        <div className="mb-5 flex flex-col justify-between gap-4">
+          <div className="flex flex-wrap gap-1">
+            {filters.map(([value, text]) => (
+              <button
+                type="button"
+                key={value}
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+                className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
+                  filter === value
+                    ? "bg-[#42362f] text-[#fffdf8]"
+                    : "text-[#75665c] hover:bg-[#eee6db]"
+                }`}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-[#75665c]">
+              {loading ? "Opening the lookout…" : `${visible.length} opportunities`}
+            </p>
+            <input
+              type="search"
+              aria-label="Search IPs and movie titles"
+              placeholder="Find a character or story…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="w-full rounded-xl border border-[#dacfc2] bg-[#fffdf8] px-4 py-2.5 text-sm outline-none placeholder:text-[#93867b] focus:border-[#c75370] focus:ring-2 focus:ring-[#f7d8df] sm:w-72"
+            />
+          </div>
+        </div>
 
-              <SummaryCard
-                label="Low Priority"
-                value={lowPriorityCount}
-                description="Do not invest heavily"
-              />
-
-              <SummaryCard
-                label="High-Fit Watchlist"
-                value={watchlistCount}
-                description="Strong fit, more history needed"
-              />
+        <section className="overflow-hidden rounded-2xl border border-[#e4d9cb] bg-[#fffdf8]">
+          {loading ? (
+            <p role="status" className="p-10 text-center text-sm text-[#75665c]">
+              Loading the latest saved report…
+            </p>
+          ) : error ? (
+            <div role="alert" className="p-8">
+              <p className="font-bold">We couldn&apos;t open the report.</p>
+              <p className="mt-2 text-sm text-[#75665c]">{error}</p>
+              <button
+                type="button"
+                onClick={() => setReloadKey((value) => value + 1)}
+                className="mt-4 rounded-lg bg-[#42362f] px-4 py-2 text-sm font-bold text-white"
+              >
+                Try again
+              </button>
             </div>
-
-            <div className="mb-8 flex flex-wrap gap-2">
-              {[
-                ["ALL", "All"],
-                ["TOP_PRIORITY", "Top Priority"],
-                ["WATCH", "Watch"],
-                ["LOW_PRIORITY", "Low Priority"],
-                ["WATCHLIST", "Watchlist"],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() =>
-                    setFilter(
-                      value as
-                        | "ALL"
-                        | "TOP_PRIORITY"
-                        | "WATCH"
-                        | "LOW_PRIORITY"
-                        | "WATCHLIST",
-                    )
-                  }
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                    filter === value
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background text-muted-foreground hover:border-primary/60 hover:text-foreground"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+          ) : visible.length === 0 ? (
+            <div className="p-12 text-center">
+              <span aria-hidden="true" className="text-3xl text-[#d65c78]">✿</span>
+              <p className="mt-3 font-bold">Nothing here just yet.</p>
+              <p className="mt-2 text-sm text-[#75665c]">
+                {results.length === 0
+                  ? "No opportunities are available in this report."
+                  : "Try another filter or search term."}
+              </p>
             </div>
-
-            <div className="mb-6 flex items-center gap-2">
-              <TrendingUp className="size-5 text-primary" />
-              <h2 className="text-2xl font-bold">
-                Ranked Opportunities
-              </h2>
-            </div>
-
-            <div className="grid gap-5">
-              {filteredRanked.map((item, index) => (
-                <OpportunityCard
-                  key={item.ip}
+          ) : (
+            <>
+              <div className="hidden grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_1.2fr_24px] gap-4 border-b border-[#e8dfd3] bg-[#f5efe5] px-6 py-3 text-[11px] font-bold uppercase tracking-wider text-[#75665c] md:grid">
+                <span>Character / story</span>
+                <span>Release</span>
+                <span>Momentum</span>
+                <span>Product fit</span>
+                <span>Priority</span>
+                <span />
+              </div>
+              {visible.map((item) => (
+                <OpportunityRow
+                  key={`${item.ip}:${item.title}`}
                   item={item}
-                  rank={index + 1}
+                  rank={item.final_score == null ? null : ranked.indexOf(item) + 1}
                 />
               ))}
-            </div>
+            </>
+          )}
+        </section>
 
-            {showWatchlist && watchlist.length > 0 && (
-              <section className="mt-14">
-                <div className="mb-3 flex items-center gap-2">
-                  <Sparkles className="size-5 text-primary" />
-                  <h2 className="text-2xl font-bold">
-                    High-Fit Watchlist
-                  </h2>
-                </div>
-
-                <p className="mb-6 text-muted-foreground">
-                  These IPs have strong Bazuuyu product fit but
-                  need another historical snapshot before
-                  momentum can be scored.
-                </p>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  {watchlist.map((item) => (
-                    <WatchlistCard
-                      key={item.ip}
-                      item={item}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
-      </section>
+        <p className="mt-4 text-xs leading-5 text-[#75665c]">
+          Open an opportunity to explore its recommendation.
+          Refresh loads the latest saved report.
+        </p>
+      </div>
     </main>
   );
 }
 
-function OpportunityCard({
+function Count({
+  value,
+  text,
+  color,
+}: {
+  value: number;
+  text: string;
+  color: string;
+}) {
+  return (
+    <span className="text-[#75665c]">
+      <strong className="mr-1.5 text-lg" style={{ color }}>{value}</strong>
+      {text}
+    </span>
+  );
+}
+
+function OpportunityRow({
   item,
   rank,
 }: {
   item: FutureOpportunity;
-  rank: number;
+  rank: number | null;
 }) {
   return (
-    <article
-      className={`glass-panel rounded-xl border p-6 transition duration-300 ${
-        item.final_priority === "TOP_PRIORITY"
-          ? "border-primary/70 bg-primary/5 shadow-lg shadow-primary/10"
-          : "border-border hover:border-primary/50"
-      }`}
-    >
-      <div className="flex flex-col justify-between gap-6 lg:flex-row">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-              #{rank}
+    <details className="group border-b border-[#eee5da] last:border-b-0">
+      <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_24px] items-center gap-4 px-5 py-5 transition hover:bg-[#faf3e9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c75370] md:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_1.2fr_24px] md:px-6 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[#9c8878]">
+              {rank === null ? "✿" : String(rank).padStart(2, "0")}
             </span>
+            <h2 className="text-base font-extrabold">{item.ip}</h2>
+          </div>
+          <p className="mt-1 truncate text-xs text-[#75665c]">{item.title}</p>
+          <p className="mt-2 text-xs font-semibold text-[#a62f4d] md:hidden">
+            {label(item.final_priority)} · Fit {score(item.fit_score)}/100
+          </p>
+        </div>
+        <p className="hidden text-xs font-semibold md:block">
+          {releaseDate(item.release_date)}
+        </p>
+        <div className="hidden md:block">
+          <p className="text-sm font-bold">{label(item.momentum_class)}</p>
+          <p className="mt-1 text-xs text-[#75665c]">{score(item.momentum_score)}</p>
+        </div>
+        <div className="hidden md:block">
+          <p className="text-sm font-bold">{score(item.fit_score)}<span className="text-xs font-normal text-[#75665c]">/100</span></p>
+          <p className="mt-1 text-xs text-[#75665c]">{label(item.fit_level)}</p>
+        </div>
+        <div className="hidden md:block">
+          <span className={`inline-block rounded-md px-2 py-1 text-[11px] font-bold ${priorityStyle(item.final_priority)}`}>
+            {label(item.final_priority)}
+          </span>
+        </div>
+        <ChevronDown
+          size={17}
+          className="text-[#9c8878] transition-transform group-open:rotate-180"
+        />
+      </summary>
 
-            <h3 className="text-2xl font-bold">
-              {item.ip}
+      <div className="border-t border-[#eee5da] bg-[#faf5ed] px-5 py-6 md:px-6">
+        <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#976650]">
+              Next step
+            </p>
+            <h3 className="mt-2 text-lg font-extrabold">
+              {label(item.recommended_action)}
             </h3>
-
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                item.final_priority === "TOP_PRIORITY"
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : item.final_priority === "WATCH"
-                    ? "border-primary/30 bg-primary/10 text-primary"
-                    : "border-border bg-muted text-muted-foreground"
-              }`}
-            >
-              {displayLabel(item.final_priority)}
-            </span>
-          </div>
-
-          <p className="mt-2 text-sm text-muted-foreground">
-            {item.title}
-          </p>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <Metric
-              label="Final Score"
-              value={scoreLabel(item.final_score)}
-            />
-
-            <Metric
-              label="Momentum"
-              value={displayLabel(
-                item.momentum_class,
-              )}
-              secondary={
-                item.momentum_score !== null
-                  ? item.momentum_score.toFixed(2)
-                  : undefined
-              }
-            />
-
-            <Metric
-              label="Product Fit"
-              value={displayLabel(item.fit_level)}
-              secondary={`${item.fit_score}/100`}
-            />
-
-            <Metric
-              label="Timing"
-              value={displayLabel(
-                item.action_timing,
-              )}
-              secondary={
-                item.timing_score !== null
-                  ? item.timing_score.toFixed(2)
-                  : undefined
-              }
-              highlight={
-                item.action_timing === "ACT_NOW"
-              }
-            />
-
-            <Metric
-              label="Signal"
-              value={displayLabel(
-                item.signal_profile,
-              )}
-            />
-          </div>
-
-          <div className="mt-6 rounded-lg border border-border bg-background/40 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Recommended Action
+            <p className="mt-2 max-w-xl text-sm leading-6 text-[#75665c]">
+              {item.recommendation_summary ||
+                "More historical observations are needed to evaluate this opportunity."}
             </p>
-
-            <p className="mt-2 font-semibold text-primary">
-              {displayLabel(
-                item.recommended_action,
-              )}
-            </p>
-
-            {item.recommendation_summary && (
-              <p className="mt-2 leading-6 text-muted-foreground">
-                {item.recommendation_summary}
-              </p>
+            <ToyEvidenceDetails evidence={item.toy_evidence} />
+            {(item.fit_signals ?? []).length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {item.fit_signals.map((signal) => (
+                  <span key={signal} className="rounded-md border border-[#ded3c4] px-2 py-1 text-[11px] text-[#75665c]">
+                    {label(signal)}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
-        </div>
-
-        <div className="lg:w-52">
-          <div className="rounded-lg border border-border p-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <CalendarDays className="size-4" />
-              Release
-            </div>
-
-            <p className="mt-2 font-semibold">
-              {item.release_date
-                ? new Date(
-                    `${item.release_date}T00:00:00`,
-                  ).toLocaleDateString()
-                : "Unknown"}
-            </p>
-
-            {item.days_to_release !== null && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {item.days_to_release} days away
-              </p>
-            )}
-          </div>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+            <dt className="text-[#75665c]">Final score</dt>
+            <dd className="font-bold">{score(item.final_score)}</dd>
+            <dt className="text-[#75665c]">Signal</dt>
+            <dd className="font-bold">{label(item.signal_profile)}</dd>
+            <dt className="text-[#75665c]">Timing</dt>
+            <dd className={`font-bold ${item.action_timing === "ACT_NOW" ? "text-[#a62f4d]" : ""}`}>
+              {label(item.action_timing)}
+            </dd>
+            <dt className="text-[#75665c]">Release</dt>
+            <dd className="font-bold">{releaseDate(item.release_date)}</dd>
+            <dt className="text-[#75665c]">Momentum</dt>
+            <dd className="font-bold">{label(item.momentum_class)} · {score(item.momentum_score)}</dd>
+            <dt className="text-[#75665c]">Product fit</dt>
+            <dd className="font-bold">{score(item.fit_score)}/100</dd>
+          </dl>
         </div>
       </div>
-    </article>
+    </details>
   );
 }
-
-function WatchlistCard({
-  item,
+function ToyEvidenceDetails({
+  evidence,
 }: {
-  item: FutureOpportunity;
+  evidence: FutureOpportunity["toy_evidence"];
 }) {
-  return (
-    <article className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-xl font-bold">
-            {item.ip}
-          </h3>
+  function count(value?: number | null) {
+    return typeof value === "number" && Number.isFinite(value)
+      ? value.toLocaleString()
+      : "Not recorded";
+  }
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            {item.title}
+  const metrics = [
+    ["IP-matched articles", evidence?.validated_article_count],
+    ["Commercial product articles", evidence?.commercial_product_article_count],
+    ["Movie-specific commercial articles", evidence?.movie_specific_commercial_article_count],
+    ["Articles in the last 30 days", evidence?.recent_30d_count],
+  ] as const;
+
+  return (
+    <section
+      aria-label="Toy industry evidence"
+      className="mt-5 border-t border-[#e4d9cb] pt-4"
+    >
+      <h4 className="text-sm font-extrabold">
+        What supports this idea?
+      </h4>
+      <p className="mt-1 text-xs text-[#75665c]">
+        ToyNewsI coverage from the saved observation.
+      </p>
+
+      {evidence ? (
+        <>
+          <dl className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-xs">
+            {metrics.map(([name, value]) => (
+              <div key={name} className="contents">
+                <dt className="text-[#75665c]">{name}</dt>
+                <dd className="text-right font-bold">{count(value)}</dd>
+              </div>
+            ))}
+            <dt className="text-[#75665c]">Latest article</dt>
+            <dd className="text-right font-bold">
+              {evidence.latest_activity
+                ? releaseDate(evidence.latest_activity)
+                : "Not recorded"}
+            </dd>
+          </dl>
+
+          <p className="mt-3 text-xs leading-5 text-[#75665c]">
+            Counts overlap. Recent articles include all IP-matched
+            coverage. Classification uses article text; coverage
+            does not measure sales or demand.
           </p>
-        </div>
-
-        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-          {item.fit_score}/100 fit
-        </span>
-      </div>
-
-      <div className="mt-5">
-        <p className="text-sm font-medium">
-          {displayLabel(item.fit_level)} Product Fit
-        </p>
-
-        <p className="mt-2 text-sm text-muted-foreground">
-          {displayLabel(
-            item.recommended_action,
-          )}
-        </p>
-      </div>
-
-      {!!item.fit_signals.length && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {item.fit_signals.map((signal) => (
-            <span
-              key={signal}
-              className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground"
-            >
-              {displayLabel(signal)}
-            </span>
-          ))}
-        </div>
-      )}
-    </article>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  secondary,
-  highlight = false,
-}: {
-  label: string;
-  value: string;
-  secondary?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-
-      <p
-        className={`mt-1 font-semibold ${
-          highlight
-            ? "text-primary"
-            : ""
-        }`}
-      >
-        {value}
-      </p>
-
-      {secondary && (
-        <p className="mt-1 text-sm text-muted-foreground">
-          {secondary}
+        </>
+      ) : (
+        <p className="mt-3 text-xs text-[#75665c]">
+          Evidence details were not recorded in this report.
         </p>
       )}
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  description,
-}: {
-  label: string;
-  value: number;
-  description: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <p className="text-sm font-medium text-muted-foreground">
-        {label}
-      </p>
-
-      <p className="mt-2 text-3xl font-bold text-foreground">
-        {value}
-      </p>
-
-      <p className="mt-1 text-sm text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function LoadingGrid() {
-  return (
-    <div className="grid gap-5">
-      {Array.from({ length: 5 }).map(
-        (_, index) => (
-          <div
-            key={index}
-            className="rounded-xl border border-border p-6"
-          >
-            <Skeleton className="h-8 w-52" />
-            <Skeleton className="mt-4 h-4 w-72" />
-
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
-            </div>
-          </div>
-        ),
-      )}
-    </div>
+    </section>
   );
 }

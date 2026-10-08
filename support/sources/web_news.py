@@ -6,7 +6,7 @@ from support.sources.news_dedup import deduplicate_news_articles
 import requests
 
 
-GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
+GOOGLE_NEWS_RSS = "https://" + "news.google.com/rss/search"
 
 
 def fetch_google_news(

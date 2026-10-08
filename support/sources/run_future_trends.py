@@ -67,6 +67,18 @@ def main():
 
     output_data = {
         "generated_at": datetime.now().isoformat(),
+        "collection_settings": {
+            "version": 1,
+            "region": "US",
+            "days_ahead": 365,
+            "discovery_pages": 10,
+            "candidate_limit": 30,
+            "routing_toy_limit": 25,
+            "toy_article_limit": 25,
+            "news_article_limit": 50,
+            "news_query_template": '"{search_query}" movie',
+            "recency_reference": "observation_date",
+        },
         "discovered_count": len(candidates),
         "kept_count": len(kept),
         "candidates": enriched,

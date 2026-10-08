@@ -1,5 +1,8 @@
 import json
+import math
 from pathlib import Path
+
+from sklearn import metrics
 
 
 DEFAULT_SNAPSHOT_DIR = Path(
@@ -50,6 +53,8 @@ def load_future_trend_history(
 
             observation = {
                 "generated_at": generated_at,
+                "collection_settings": snapshot.get("collection_settings"),
+                "search_query": candidate.get("search_query") or ip,
                 "release_date": candidate.get(
                     "release_date"
                 ),
@@ -137,7 +142,7 @@ def load_future_trend_history(
 
     return history
 
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 
 
 def _safe_number(value):
@@ -654,6 +659,78 @@ def calculate_ip_momentum(
         ) or "",
     )
 
+
+    # Compare only observations with matching collection settings,
+    # the same query, valid measurements, and at least 24 hours apart.
+    latest = ordered[-1]
+    settings = latest.get("collection_settings")
+
+    metrics = (
+        "toy_article_count",
+        "news_story_count",
+        "news_publisher_count",
+    )
+
+    def valid_counts(observation):
+        import math
+
+        return all(
+            isinstance(observation.get(field), (int, float))
+            and not isinstance(observation.get(field), bool)
+            and math.isfinite(observation[field])
+            and observation[field] >= 0
+            for field in metrics
+        )
+
+    def observation_time(observation):
+        from datetime import timezone
+
+        value = observation.get("generated_at")
+        if not isinstance(value, str):
+            return None
+
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+        #Existing snapshots use local timestamps without an offset.
+        # Compare those with each other, not with timezone-aware snapshots.
+        return (
+            parsed.astimezone(timezone.utc)
+            if parsed.tzinfo is not None
+            else parsed
+        )
+
+    latest_time = observation_time(latest)
+    compatible_previous = []
+
+    if isinstance(settings, dict) and settings and valid_counts(latest):
+        for observation in ordered[:-1]:
+            previous_time = observation_time(observation)
+
+            if (
+                observation.get("collection_settings") != settings
+                or observation.get("search_query") != latest.get("search_query")
+                or not valid_counts(observation)
+                or previous_time is None
+                or latest_time is None
+            ):
+                continue
+
+            if (previous_time.tzinfo is None) != (latest_time.tzinfo is None):
+                continue
+
+            if (latest_time - previous_time).total_seconds() >= 86400:
+                compatible_previous.append(observation)
+
+    # One observation follows the existing Pending/watchlist path.
+    ordered = (
+        [compatible_previous[-1], latest]
+        if compatible_previous
+        else [latest]
+    )
+
     if len(ordered) < 2:
         latest = ordered[-1]
 
@@ -698,8 +775,9 @@ def calculate_ip_momentum(
             "bazuuyu_opportunity_class": "INSUFFICIENT_DATA",
             "recommended_action": "COLLECT_MORE_DATA",
             "recommendation_summary": (
-                "Only one historical observation is available. "
-                "Collect another snapshot before evaluating momentum."
+                "Two observations with matching collection settings, valid "
+                "measurements, and at least 24 hours between them are required. "
+                "Older snapshots without collection metadata are not compared."
             ),
         }
 

@@ -1,8 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+from urllib.parse import urljoin
 
-TOYNEWSI_URL = "https://toynewsi.com/"
+TOYNEWSI_URL = "https://" + "toynewsi.com/"
 
 def fetch_toynewsi_articles(limit: int = 20) -> list[dict]:
     """
@@ -50,8 +51,8 @@ def fetch_toynewsi_articles(limit: int = 20) -> list[dict]:
         if url.startswith("/"):
             url = f"https://toynewsi.com{url}"
 
-        if not url.startswith("https://toynewsi.com/"):
-            continue  # Skip external links
+        if not url.startswith(TOYNEWSI_URL):
+            continue
 
         if url in seen_urls:
             continue  # Skip duplicate URLs
@@ -88,7 +89,7 @@ def search_toynewsi(query: str, limit: int = 50) -> list[dict]:
     }
 
     response = requests.post(
-        "https://toynewsi.com/index.php",
+        TOYNEWSI_URL + "index.php",
         data={
             "query": query,
             "amount": "0",
@@ -330,19 +331,18 @@ def summarize_toynewsi_ip(
     ]
 
     if parsed_dates:
-        latest_date = max(parsed_dates)
-
-        cutoff_30d = latest_date - timedelta(days=30)
-        cutoff_90d = latest_date - timedelta(days=90)
+        today = datetime.now().date()
+        cutoff_30d = today - timedelta(days=30)
+        cutoff_90d = today - timedelta(days=90)
 
         recent_30d_count = sum(
-            date >= cutoff_30d
-            for date in parsed_dates
+            cutoff_30d <= published.date() <= today
+            for published in parsed_dates
         )
 
         recent_90d_count = sum(
-            date >= cutoff_90d
-            for date in parsed_dates
+            cutoff_90d <= published.date() <= today
+            for published in parsed_dates
         )
 
     return {
